@@ -1,0 +1,42 @@
+name: "UniFi Port Map"
+version: "1.0.0"
+slug: "unifi_portmap"
+description: "Which client is on which switch port (UniFi controller, view-only) published to Home Assistant for port finding"
+startup: services
+boot: auto
+init: false
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+  - i386
+
+host_network: true
+hassio_api: true
+services:
+  - mqtt:need
+
+options:
+  host: "192.168.1.2"
+  username: ""
+  password: ""
+  site: "default"
+  switch_ip: "192.168.1.3"
+  verify_tls: false
+  poll_interval: 30
+  log_level: "INFO"
+
+schema:
+  host: str
+  username: str
+  password: password
+  site: str
+  switch_ip: str
+  verify_tls: bool
+  poll_interval: int(10,)
+  mqtt_host: str?
+  mqtt_port: port?
+  mqtt_user: str?
+  mqtt_password: password?
+  log_level: list(DEBUG|INFO|WARNING|ERROR)?
