@@ -4,6 +4,10 @@ Publishes, for one UniFi switch, which wired client is plugged into which port, 
 port's link state, speed and PoE draw, as the **UniFi Port Map** MQTT device in Home Assistant.
 The RackView "Port Hunt" page uses it to find a client's jack and blink it via UIWLED.
 
+Since 1.1.0 it also publishes **Network Clients**: every client on the network (wired and Wi-Fi) with where
+it connects and when the controller first saw it, in the sensor's attributes. RackView uses it for
+new-device alerts.
+
 Use a **view-only local account** on the UniFi OS console (Cloud Key / UDM):
 Settings → Admins & Users → Create New → "Restrict to local access only",
 role: Network = *View Only*, no other apps.

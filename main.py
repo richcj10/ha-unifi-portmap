@@ -1,8 +1,11 @@
 """UniFi Port Map.
 
-Logs into a UniFi OS console (Cloud Key / UDM) with a view-only account and publishes, for one
-switch, which client is plugged into which port (plus each port's link, speed and PoE) to Home
-Assistant via MQTT discovery. Used by the RackView "Port Hunt" page to find and light a jack.
+Logs into a UniFi OS console (Cloud Key / UDM) with a view-only account and publishes to Home Assistant
+via MQTT discovery:
+  * for one switch, which client is plugged into which port (plus each port's link, speed and PoE), used by
+    the RackView "Port Hunt" page to find and light a jack;
+  * every client on the network (wired and Wi-Fi) with where it connects and when the controller first saw
+    it, used for new-device alerts.
 """
 import json
 import logging
@@ -137,6 +140,23 @@ def build_state(u: UniFi, switch_ip: str) -> Dict[str, Any]:
                 ports_up=sum(1 for p in ports if p["up"]), updated=int(time.time()), status="ok")
 
 
+def build_network(u: UniFi) -> Dict[str, Any]:
+    """Every client on the network, kept short (HA keeps attributes under ~16 KB)."""
+    names = {(d.get("mac") or "").lower(): d.get("name") or d.get("model") or "?" for d in u.get("/stat/device")}
+    out = []
+    for c in u.get("/stat/sta"):
+        wired = bool(c.get("is_wired"))
+        if wired:
+            at = f"{names.get((c.get('sw_mac') or '').lower(), 'switch')} port {c.get('sw_port')}"
+        else:
+            at = f"{names.get((c.get('ap_mac') or '').lower(), 'AP')} · {c.get('essid') or 'Wi-Fi'}"
+        out.append({"m": c.get("mac"), "n": (c.get("name") or c.get("hostname") or c.get("oui") or c.get("mac") or "?")[:32],
+                    "ip": c.get("ip") or c.get("last_ip"), "w": 1 if wired else 0, "at": at[:40],
+                    "net": (c.get("network") or "")[:20], "fs": c.get("first_seen"), "o": (c.get("oui") or "")[:20]})
+    out.sort(key=lambda c: -(c["fs"] or 0))
+    return {"network": out[:180], "count": len(out), "updated": int(time.time())}
+
+
 def publish_discovery(client: mqtt.Client, uid: str, switch_ip: str, name: str) -> None:
     dev = {"identifiers": [uid], "name": "UniFi Port Map", "manufacturer": "Ubiquiti",
            "model": "UniFi Port Map", "configuration_url": f"https://{switch_ip}/"}
@@ -146,6 +166,9 @@ def publish_discovery(client: mqtt.Client, uid: str, switch_ip: str, name: str) 
         ("sensor", "ports_up", f"{name} Ports Up", "ports_up", {"icon": "mdi:ethernet", "state_class": "measurement"}),
         ("sensor", "status", "Controller Status", "status", {"icon": "mdi:cloud-check-outline",
                                                              "entity_category": "diagnostic"}),
+        ("sensor", "network_clients", "Network Clients", "count",
+         {"icon": "mdi:devices", "state_class": "measurement", "json_attributes_topic": f"{BASE}/network",
+          "state_topic": f"{BASE}/network"}),
     ]
     for comp, oid, ename, key, extra in ents:
         cfg = {"name": ename, "unique_id": f"{uid}_{oid}", "device": dev, "state_topic": f"{BASE}/state",
@@ -193,6 +216,7 @@ def main() -> None:
                 publish_discovery(client, uid, switch_ip, st["switch_name"] or "Switch")
                 published = True
             client.publish(f"{BASE}/state", json.dumps(st), retain=True)
+            client.publish(f"{BASE}/network", json.dumps(build_network(u)), retain=True)
             log.debug("%d clients, %d ports up", st["client_count"], st["ports_up"])
         except urllib.error.HTTPError as e:
             log.error("UniFi API error %s: %s", e.code, e.reason)

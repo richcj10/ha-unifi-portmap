@@ -1,7 +1,7 @@
 name: "UniFi Port Map"
-version: "1.0.0"
+version: "1.1.0"
 slug: "unifi_portmap"
-description: "Which client is on which switch port (UniFi controller, view-only) published to Home Assistant for port finding"
+description: "Which client is on which switch port, plus every network client for new-device alerts (UniFi controller, view-only)"
 startup: services
 boot: auto
 init: false
